@@ -526,7 +526,7 @@ namespace j1t::hal
                                 assembler.emit_subtract_immediate_from_pointer(REGISTER_STACK_TOP, REGISTER_STACK_TOP, 4u);
                                 assembler.emit_load_u32_from_base_plus_offset(REGISTER_TEMP_W3, REGISTER_STACK_TOP, 0);
 
-                                assembler.emit_divide_u32_register(REGISTER_TEMP_W3, REGISTER_TEMP_W3, REGISTER_TEMP_W2);
+                                assembler.emit_divide_i32_register(REGISTER_TEMP_W3, REGISTER_TEMP_W3, REGISTER_TEMP_W2);
 
                                 assembler.emit_store_u32_from_register_to_base_plus_offset(
                                     REGISTER_TEMP_W3,

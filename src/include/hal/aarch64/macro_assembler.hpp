@@ -42,6 +42,8 @@ namespace j1t::hal::aarch64
 
         auto emit_divide_u32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register)
             -> void override;
+        auto emit_divide_i32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register)
+            -> void override;
 
         auto emit_cset_u32(uint32_t destination_register, uint32_t condition) -> void override;
 

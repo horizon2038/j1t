@@ -125,6 +125,16 @@ namespace j1t::hal::aarch64
         );
     }
 
+    auto macro_assembler::emit_divide_i32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register)
+        -> void
+    {
+        // SDIV wd, wn, wm
+        emit_u32_instruction(
+            0x1AC0'0C00u | ((right_register & 0x1Fu) << 16u) | ((left_register & 0x1Fu) << 5u)
+            | (destination_register & 0x1Fu)
+        );
+    }
+
     auto macro_assembler::emit_move_pointer_register(uint32_t destination_register, uint32_t source_register) -> void
     {
         // MOV xd, xn  (alias: ORR xd, xzr, xn)

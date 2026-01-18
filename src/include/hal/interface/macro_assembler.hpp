@@ -49,6 +49,10 @@ namespace j1t::hal
             emit_divide_u32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register) -> void
             = 0;
 
+        virtual auto
+            emit_divide_i32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register) -> void
+            = 0;
+
         virtual auto emit_cset_u32(uint32_t destination_register, uint32_t condition) -> void = 0;
 
         virtual auto
