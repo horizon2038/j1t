@@ -279,6 +279,39 @@ namespace j1t::vm
                         break;
                     }
 
+                case opcode::STORE_8 :
+                    {
+                        auto value = pop_u32();
+                        auto addr  = pop_u32();
+
+                        if (!value.has_value() || !addr.has_value())
+                        {
+                            return std::unexpected(error::STACK_UNDERFLOW);
+                        }
+
+                        uint32_t address = addr.value();
+                        if (address >= initial_state.memory.size())
+                        {
+                            return std::unexpected(error::MEMORY_OUT_OF_BOUNDS);
+                        }
+
+                        initial_state.memory[address] = static_cast<uint8_t>(value.value() & 0xFFu);
+                        break;
+                    }
+
+                // HACK: for brainfuck
+                case opcode::READ_8_UNSIGNED :
+                    {
+                        int c = std::getchar();
+                        if (c == EOF)
+                        {
+                            c = 0;
+                        }
+
+                        push_u32(static_cast<uint32_t>(static_cast<uint8_t>(c)));
+                        break;
+                    }
+
                 case opcode::LESS_THAN_SIGNED :
                     {
                         if (initial_state.stack.size() < 2)

@@ -121,6 +121,28 @@ namespace
         assembler.branch_cond(0x8u, label_runtime_error);
     }
 
+    extern "C"
+    {
+        static auto j1t_helper_store8(uint8_t *memory, uint32_t address, uint32_t value) -> void
+        {
+            memory[address] = static_cast<uint8_t>(value & 0xFFu);
+        }
+
+        static auto j1t_helper_load8u(const uint8_t *memory, uint32_t address) -> uint32_t
+        {
+            return static_cast<uint32_t>(memory[address]);
+        }
+
+        static auto j1t_helper_read8u(void) -> uint32_t
+        {
+            int c = std::getchar();
+            if (c == EOF)
+            {
+                c = 0;
+            }
+            return static_cast<uint32_t>(static_cast<uint8_t>(c));
+        }
+    }
 }
 
 namespace j1t::hal
@@ -157,7 +179,7 @@ namespace j1t::hal
             auto compile(const j1t::vm::program &target_program) -> std::unique_ptr<j1t::hal::compiled_code> override
             {
                 // TODO: improve memory size estimation
-                auto memory = std::make_unique<j1t::hal::aarch64::executable_memory_macos>(4096 * 8u);
+                auto memory = std::make_unique<j1t::hal::aarch64::executable_memory_macos>(4096 * 4096u);
                 memory->begin_write();
                 j1t::hal::aarch64::macro_assembler assembler;
                 assembler.set_output(*memory);
@@ -174,6 +196,7 @@ namespace j1t::hal
                 constexpr uint32_t REGISTER_TMP_X9    = 9;
                 constexpr uint32_t REGISTER_TMP_X10   = 10;
                 constexpr uint32_t REGISTER_ERROR_W1  = 1;
+                constexpr uint32_t REGISTER_TMP_X4    = 4; // scratch
 
                 constexpr int32_t OFFSET_MEMORY       = 0;
                 constexpr int32_t OFFSET_STACK_BASE   = static_cast<int32_t>(sizeof(void *) * 1);
@@ -232,45 +255,6 @@ namespace j1t::hal
                 uint32_t pc { 0 };
 
                 auto label_epilogue = assembler.create_label();
-
-                // test
-                /*
-                auto label_after = assembler.create_label();
-
-                assembler.branch(label_after);
-                assembler.bind_label(label_after);
-
-                assembler.emit_move_immediate_u32(REGISTER_RET_W0, 0x1234u);
-
-                assembler.emit_load_pointer_from_base_plus_offset(REGISTER_CONTEXT, REGISTER_SP, 8);
-                assembler.emit_load_pointer_from_base_plus_offset(REGISTER_STACK_TOP, REGISTER_SP, 16);
-                assembler.emit_load_pointer_from_base_plus_offset(REGISTER_LR, REGISTER_SP, 24);
-                assembler.emit_add_immediate_to_pointer(REGISTER_SP, REGISTER_SP, 32u);
-                assembler.emit_return();
-
-                std::printf("memory->data()=%p assembler.output=%p\n", memory->data(), assembler.debug_output_base());
-                assembler.finalize();
-
-                memory->end_write();
-                uintmax_t new_used_size = assembler.code_size_bytes();
-                j1t::hal::flush_instruction_cache(memory->data(), new_used_size);
-                memory->finalize();
-                auto load_u32_le = [](const uint8_t *p) -> uint32_t
-                {
-                    return (uint32_t)p[0] | ((uint32_t)p[1] << 8u) | ((uint32_t)p[2] << 16u) | ((uint32_t)p[3] << 24u);
-                };
-
-                std::printf("code_size_bytes=%ju\n", (uintmax_t)assembler.code_size_bytes());
-
-                for (uint32_t i = 0; i < 24; ++i)
-                {
-                    uint32_t insn = load_u32_le(memory->data() + i * 4u);
-                    std::printf("insn[%02u] pc=%03u 0x%08x\n", i, i * 4u, insn);
-                }
-                std::printf("insn[06] = 0x%08x\n", load_u32_le(memory->data() + 6 * 4u));
-                return std::make_unique<compiled_code_aarch64>(std::move(memory), static_cast<uint32_t>(new_used_size));
-                */
-
                 while (pc < target_program.code.size())
                 {
                     uint32_t        opcode_pc = pc;
@@ -692,6 +676,161 @@ namespace j1t::hal
 
                                 assembler.emit_compare_u32_registers(REGISTER_TEMP_W2, REGISTER_ZERO_WZR);
                                 assembler.branch_not_equal(pc_to_label[target_pc]);
+                                break;
+                            }
+                        case j1t::vm::opcode::LOAD_8_UNSIGNED :
+                            {
+                                // stack: [..., addr] -> [..., value_u32]
+
+                                emit_check_can_pop_bytes(
+                                    assembler,
+                                    REGISTER_CONTEXT,
+                                    REGISTER_STACK_TOP,
+                                    REGISTER_TMP_X9,
+                                    REGISTER_TMP_X10,
+                                    REGISTER_ERROR_W1,
+                                    label_runtime_error,
+                                    OFFSET_STACK_BASE,
+                                    4u,
+                                    1u // STACK_UNDERFLOW
+                                );
+
+                                emit_check_can_push_bytes(
+                                    assembler,
+                                    REGISTER_CONTEXT,
+                                    REGISTER_STACK_TOP,
+                                    REGISTER_TMP_X9,
+                                    REGISTER_TMP_X10,
+                                    REGISTER_ERROR_W1,
+                                    label_runtime_error,
+                                    OFFSET_STACK_END,
+                                    4u,
+                                    2u // STACK_OVERFLOW
+                                );
+
+                                // pop addr -> w2
+                                assembler.emit_subtract_immediate_from_pointer(REGISTER_STACK_TOP, REGISTER_STACK_TOP, 4u);
+                                assembler.emit_load_u32_from_base_plus_offset(REGISTER_TEMP_W2, REGISTER_STACK_TOP, 0);
+
+                                // x4 = ctx->memory
+                                assembler.emit_load_pointer_from_base_plus_offset(
+                                    REGISTER_TMP_X4,
+                                    REGISTER_CONTEXT,
+                                    OFFSET_MEMORY
+                                );
+
+                                // arg0 x0 = memory
+                                assembler.emit_move_pointer_register(0, REGISTER_TMP_X4);
+
+                                // arg1 w1 = addr
+                                assembler.emit_add_u32_register(
+                                    1, // w1
+                                    REGISTER_ZERO_WZR,
+                                    REGISTER_TEMP_W2
+                                );
+
+                                // call helper: uint32_t load8u(const uint8_t*, uint32_t)
+                                assembler.emit_move_pointer_immediate(
+                                    REGISTER_CALL_TMP,
+                                    reinterpret_cast<uintptr_t>(&j1t_helper_load8u)
+                                );
+                                assembler.emit_call_register(REGISTER_CALL_TMP);
+
+                                // push w0 (return) onto vm stack
+                                assembler.emit_store_u32_from_register_to_base_plus_offset(
+                                    0, // w0
+                                    REGISTER_STACK_TOP,
+                                    0
+                                );
+                                assembler.emit_add_immediate_to_pointer(REGISTER_STACK_TOP, REGISTER_STACK_TOP, 4u);
+                                break;
+                            }
+
+                        case j1t::vm::opcode::STORE_8 :
+                            {
+                                // stack: [..., addr, value] -> [...]
+
+                                emit_check_can_pop_bytes(
+                                    assembler,
+                                    REGISTER_CONTEXT,
+                                    REGISTER_STACK_TOP,
+                                    REGISTER_TMP_X9,
+                                    REGISTER_TMP_X10,
+                                    REGISTER_ERROR_W1,
+                                    label_runtime_error,
+                                    OFFSET_STACK_BASE,
+                                    8u,
+                                    1u // STACK_UNDERFLOW
+                                );
+
+                                // pop value -> w2
+                                assembler.emit_subtract_immediate_from_pointer(REGISTER_STACK_TOP, REGISTER_STACK_TOP, 4u);
+                                assembler.emit_load_u32_from_base_plus_offset(REGISTER_TEMP_W2, REGISTER_STACK_TOP, 0);
+
+                                // pop addr -> w3
+                                assembler.emit_subtract_immediate_from_pointer(REGISTER_STACK_TOP, REGISTER_STACK_TOP, 4u);
+                                assembler.emit_load_u32_from_base_plus_offset(REGISTER_TEMP_W3, REGISTER_STACK_TOP, 0);
+
+                                // x4 = ctx->memory
+                                assembler.emit_load_pointer_from_base_plus_offset(
+                                    REGISTER_TMP_X4,
+                                    REGISTER_CONTEXT,
+                                    OFFSET_MEMORY
+                                );
+
+                                // arg0 x0 = memory
+                                assembler.emit_move_pointer_register(0, REGISTER_TMP_X4);
+
+                                // arg1 w1 = addr (w3)
+                                assembler.emit_add_u32_register(
+                                    1, // w1
+                                    REGISTER_ZERO_WZR,
+                                    REGISTER_TEMP_W3
+                                );
+
+                                // arg2 w2 = value (already in w2)
+                                // (no-op)
+
+                                // call helper: void store8(uint8_t*, uint32_t, uint32_t)
+                                assembler.emit_move_pointer_immediate(
+                                    REGISTER_CALL_TMP,
+                                    reinterpret_cast<uintptr_t>(&j1t_helper_store8)
+                                );
+                                assembler.emit_call_register(REGISTER_CALL_TMP);
+                                break;
+                            }
+
+                        case j1t::vm::opcode::READ_8_UNSIGNED :
+                            {
+                                // stack: [...] -> [..., value_u32]
+
+                                emit_check_can_push_bytes(
+                                    assembler,
+                                    REGISTER_CONTEXT,
+                                    REGISTER_STACK_TOP,
+                                    REGISTER_TMP_X9,
+                                    REGISTER_TMP_X10,
+                                    REGISTER_ERROR_W1,
+                                    label_runtime_error,
+                                    OFFSET_STACK_END,
+                                    4u,
+                                    2u // STACK_OVERFLOW
+                                );
+
+                                // call helper: uint32_t read8u()
+                                assembler.emit_move_pointer_immediate(
+                                    REGISTER_CALL_TMP,
+                                    reinterpret_cast<uintptr_t>(&j1t_helper_read8u)
+                                );
+                                assembler.emit_call_register(REGISTER_CALL_TMP);
+
+                                // push w0
+                                assembler.emit_store_u32_from_register_to_base_plus_offset(
+                                    0, // w0
+                                    REGISTER_STACK_TOP,
+                                    0
+                                );
+                                assembler.emit_add_immediate_to_pointer(REGISTER_STACK_TOP, REGISTER_STACK_TOP, 4u);
                                 break;
                             }
 

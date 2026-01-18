@@ -35,6 +35,8 @@ namespace j1t::vm
         LOAD_16_UNSIGNED,
         LOAD_32,
 
+        STORE_8,
+
         // control flow
         JUMP,
         JUMP_IF_ZERO,
@@ -45,6 +47,7 @@ namespace j1t::vm
 
         // debug
         PRINT,
+        READ_8_UNSIGNED,
     };
 
     // *explicitly* convert opcode to its raw underlying value

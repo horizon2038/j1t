@@ -4,6 +4,8 @@
 #include <memory>
 
 #include <hal/interface/jit_backend.hpp>
+#include <print>
+#include <util/time.hpp>
 #include <vm/interpreter.hpp>
 
 namespace j1t::jit
@@ -24,7 +26,14 @@ namespace j1t::jit
                 return std::unexpected(j1t::vm::interpreter::error::INVALID_OPCODE);
             }
 
-            auto compiled = backend->compile(program);
+            auto compiled = util::calculate_time(
+                [&]() -> std::unique_ptr<j1t::hal::compiled_code>
+                {
+                    std::print("JIT compiling...\n");
+                    return backend->compile(program);
+                }
+            );
+            // auto compiled = backend->compile(program);
             if (!compiled)
             {
                 return std::unexpected(j1t::vm::interpreter::error::INVALID_OPCODE);
@@ -45,9 +54,14 @@ namespace j1t::jit
             ctx.locals     = state.locals.empty() ? nullptr : state.locals.data();
             ctx.error_code = 0;
 
-            std::printf("before entry()\n");
-            uint32_t ret = compiled->entry()(&ctx);
-            std::printf("after entry(), ret = %u\n", ret);
+            // uint32_t ret   = compiled->entry()(&ctx);
+            auto ret = util::calculate_time(
+                [&]() -> uint32_t
+                {
+                    std::print("JIT executing...\n");
+                    return compiled->entry()(&ctx);
+                }
+            );
             if (ctx.error_code != 0)
             {
                 switch (ctx.error_code)

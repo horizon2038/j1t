@@ -57,3 +57,4 @@ dkms.conf
 
 .cache
 .DS_Store
+/src/exp/

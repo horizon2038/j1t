@@ -253,8 +253,16 @@ namespace j1t::hal::aarch64
         return 0x5400'0000u | ((static_cast<uint32_t>(immediate19) & 0x0007'FFFFu) << 5u) | (condition & 0x000Fu);
     }
 
+    inline static auto invert_condition(uint32_t condition) -> uint32_t
+    {
+        // Invert condition code for AArch64
+        // eq(0) <-> ne(1), lt(11) <-> ge(10), le(12) <-> gt(13), etc.
+        return condition ^ 1u & 0x0Fu;
+    }
+
     auto macro_assembler::branch_cond(uint32_t condition, label target_label) -> void
     {
+        /*
         uint32_t instruction_pc = program_counter;
         emit_u32_instruction(encode_conditional_immediate19(condition, 0));
         branch_patches.push_back(
@@ -265,6 +273,26 @@ namespace j1t::hal::aarch64
                 (condition & 0x0Fu),
             }
         );
+        */
+        // IMPORTANT:
+        // B.cond imm19 has a short range. For large code, it can go out of range.
+        // So we always lower:
+        //   B.<invcond> +8
+        //   B target
+        //
+        // The first branch is always in range (to the next-next instruction).
+        // The long jump is handled by unconditional B imm26 (much larger range).
+
+        const uint32_t inv = invert_condition(condition);
+
+        // Jump over the unconditional branch (2 instructions ahead = +8 bytes)
+        // NOTE: branch immediate is PC-relative to the address of this instruction.
+        emit_u32_instruction(encode_conditional_immediate19(inv, 2));
+
+        // Now emit an unconditional branch that we will patch to target_label.
+        const uint32_t uncond_pc = program_counter;
+        emit_u32_instruction(encode_unconditional_immediate26(0));
+        branch_patches.push_back(branch_patch { uncond_pc, target_label.id, branch_patch::type::UNCONDITIONAL, 0u });
     }
 
     auto macro_assembler::branch(label target_label) -> void
