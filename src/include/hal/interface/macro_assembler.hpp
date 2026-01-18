@@ -16,41 +16,52 @@ namespace j1t::hal
             uint32_t id { 0 };
         };
 
-        virtual ~macro_assembler(void) = default;
+        virtual ~macro_assembler(void)                                                                        = default;
 
-        virtual auto set_output(j1t::hal::executable_memory &output_memory) -> void
+        virtual auto set_output(j1t::hal::executable_memory &output_memory) -> void                           = 0;
+
+        virtual auto create_label(void) -> label                                                              = 0;
+        virtual auto bind_label(label target_label) -> void                                                   = 0;
+
+        virtual auto branch(label target_label) -> void                                                       = 0;
+        virtual auto branch_equal(label target_label) -> void                                                 = 0;
+        virtual auto branch_not_equal(label target_label) -> void                                             = 0;
+
+        virtual auto emit_move_immediate_u32(uint32_t destination_register, uint32_t immediate_value) -> void = 0;
+        virtual auto
+            emit_load_u32_from_base_plus_offset(uint32_t destination_register, uint32_t base_register, int32_t offset)
+                -> void
+            = 0;
+        virtual auto
+            emit_store_u32_from_register_to_base_plus_offset(uint32_t source_register, uint32_t base_register, int32_t offset)
+                -> void
+            = 0;
+        virtual auto
+            emit_subtract_u32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register)
+                -> void
             = 0;
 
-        virtual auto create_label(void) -> label                  = 0;
-        virtual auto bind_label(label target_label) -> void       = 0;
-
-        virtual auto branch(label target_label) -> void           = 0;
-        virtual auto branch_equal(label target_label) -> void     = 0;
-        virtual auto branch_not_equal(label target_label) -> void = 0;
-
-        virtual auto emit_move_immediate_u32(
-            uint32_t destination_register,
-            uint32_t immediate_value
-        ) -> void
+        virtual auto
+            emit_multiply_u32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register)
+                -> void
             = 0;
-        virtual auto emit_load_u32_from_base_plus_offset(
-            uint32_t destination_register,
-            uint32_t base_register,
-            int32_t  offset
-        ) -> void
-            = 0;
-        virtual auto emit_store_u32_from_register_to_base_plus_offset(
-            uint32_t source_register,
-            uint32_t base_register,
-            int32_t  offset
-        ) -> void
+        virtual auto
+            emit_divide_u32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register) -> void
             = 0;
 
-        virtual auto emit_load_pointer_from_base_plus_offset(
-            uint32_t destination_register,
-            uint32_t base_register,
-            int32_t  offset
-        ) -> void
+        virtual auto emit_cset_u32(uint32_t destination_register, uint32_t condition) -> void = 0;
+
+        virtual auto
+            emit_add_pointer_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register) -> void
+            = 0;
+        virtual auto
+            emit_shift_left_u32_immediate(uint32_t destination_register, uint32_t source_register, uint32_t shift) -> void
+            = 0;
+        virtual auto emit_move_u32_register(uint32_t destination_register, uint32_t source_register) -> void = 0;
+
+        virtual auto
+            emit_load_pointer_from_base_plus_offset(uint32_t destination_register, uint32_t base_register, int32_t offset)
+                -> void
             = 0;
         virtual auto emit_store_pointer_from_register_to_base_plus_offset(
             uint32_t source_register,
@@ -59,11 +70,9 @@ namespace j1t::hal
         ) -> void
             = 0;
 
-        virtual auto emit_add_immediate_to_pointer(
-            uint32_t destination_register,
-            uint32_t source_register,
-            uint32_t immediate_value
-        ) -> void
+        virtual auto
+            emit_add_immediate_to_pointer(uint32_t destination_register, uint32_t source_register, uint32_t immediate_value)
+                -> void
             = 0;
         virtual auto emit_subtract_immediate_from_pointer(
             uint32_t destination_register,
@@ -72,22 +81,25 @@ namespace j1t::hal
         ) -> void
             = 0;
 
-        virtual auto emit_add_u32_register(
-            uint32_t destination_register,
-            uint32_t left_register,
-            uint32_t right_register
-        ) -> void
+        virtual auto emit_add_u32_register(uint32_t destination_register, uint32_t left_register, uint32_t right_register)
+            -> void
             = 0;
-        virtual auto emit_compare_u32_registers(
-            uint32_t left_register,
-            uint32_t right_register
-        ) -> void
-            = 0;
+        virtual auto emit_compare_u32_registers(uint32_t left_register, uint32_t right_register) -> void     = 0;
+        virtual auto emit_compare_pointer_registers(uint32_t left_register, uint32_t right_register) -> void = 0;
 
-        virtual auto emit_return(void) -> void               = 0;
+        // pointer/addr operations (architecture-independent meaning)
+        virtual auto emit_move_pointer_immediate(uint32_t destination_register, uintptr_t immediate_value) -> void = 0;
 
-        virtual auto finalize(void) -> void                  = 0;
-        virtual auto code_size_bytes(void) const -> uint32_t = 0;
+        virtual auto emit_move_pointer_register(uint32_t destination_register, uint32_t source_register) -> void   = 0;
+
+        // call helper: call address stored in a register (ABI is arch-defined,
+        // op is generic)
+        virtual auto emit_call_register(uint32_t function_register) -> void = 0;
+
+        virtual auto emit_return(void) -> void                              = 0;
+
+        virtual auto finalize(void) -> void                                 = 0;
+        virtual auto code_size_bytes(void) const -> uint32_t                = 0;
     };
 }
 

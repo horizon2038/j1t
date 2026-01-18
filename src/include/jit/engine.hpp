@@ -17,8 +17,7 @@ namespace j1t::jit
         {
         }
 
-        auto run(const j1t::vm::program &program, j1t::vm::state &state)
-            -> j1t::vm::interpreter::result<>
+        auto run(const j1t::vm::program &program, j1t::vm::state &state) -> j1t::vm::interpreter::result<>
         {
             if (!backend)
             {
@@ -31,24 +30,44 @@ namespace j1t::jit
                 return std::unexpected(j1t::vm::interpreter::error::INVALID_OPCODE);
             }
 
-            j1t::hal::jit_context ctx {};
-            ctx.memory = state.memory.empty() ? nullptr : state.memory.data();
-            ctx.stack_base = state.stack.empty() ? nullptr : state.stack.data();
-            ctx.stack_top  = state.stack.empty() ?
-                                 nullptr :
-                                 state.stack.data() + state.stack.size();
-            ctx.locals   = state.locals.empty() ? nullptr : state.locals.data();
+            static constexpr uintmax_t STACK_CAPACITY_WORDS = 4096;
 
+            if (state.stack.size() < STACK_CAPACITY_WORDS)
+            {
+                state.stack.resize(STACK_CAPACITY_WORDS);
+            }
+
+            j1t::hal::jit_context ctx {};
+            ctx.memory     = state.memory.empty() ? nullptr : state.memory.data();
+            ctx.stack_base = state.stack.empty() ? nullptr : state.stack.data();
+            ctx.stack_top  = ctx.stack_base;
+            ctx.stack_end  = ctx.stack_base + static_cast<std::ptrdiff_t>(state.stack.size());
+            ctx.locals     = state.locals.empty() ? nullptr : state.locals.data();
+            ctx.error_code = 0;
+
+            std::printf("before entry()\n");
             uint32_t ret = compiled->entry()(&ctx);
+            std::printf("after entry(), ret = %u\n", ret);
+            if (ctx.error_code != 0)
+            {
+                switch (ctx.error_code)
+                {
+                    case 1 :
+                        return std::unexpected(j1t::vm::interpreter::error::STACK_UNDERFLOW);
+
+                    case 2 :
+                        [[fallthrough]];
+                    default :
+                        return std::unexpected(j1t::vm::interpreter::error::INVALID_OPCODE);
+                }
+            }
 
             if (ctx.stack_base != nullptr && ctx.stack_top != nullptr)
             {
                 std::ptrdiff_t diff = ctx.stack_top - ctx.stack_base;
                 if (diff < 0)
                 {
-                    return std::unexpected(
-                        j1t::vm::interpreter::error::STACK_UNDERFLOW
-                    );
+                    return std::unexpected(j1t::vm::interpreter::error::STACK_UNDERFLOW);
                 }
 
                 state.stack.resize(static_cast<std::size_t>(diff));

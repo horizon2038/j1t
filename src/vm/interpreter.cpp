@@ -281,6 +281,41 @@ namespace j1t::vm
                         break;
                     }
 
+                case opcode::LESS_THAN_SIGNED :
+                    {
+                        if (initial_state.stack.size() < 2)
+                        {
+                            return std::unexpected(error::STACK_UNDERFLOW);
+                        }
+
+                        uint32_t rhs_u32 = initial_state.stack.back();
+                        initial_state.stack.pop_back();
+                        uint32_t lhs_u32 = initial_state.stack.back();
+                        initial_state.stack.pop_back();
+
+                        int32_t rhs = static_cast<int32_t>(rhs_u32);
+                        int32_t lhs = static_cast<int32_t>(lhs_u32);
+
+                        initial_state.stack.push_back((lhs < rhs) ? 1u : 0u);
+                        break;
+                    }
+
+                case opcode::LESS_THAN_UNSIGNED :
+                    {
+                        if (initial_state.stack.size() < 2)
+                        {
+                            return std::unexpected(error::STACK_UNDERFLOW);
+                        }
+
+                        uint32_t rhs = initial_state.stack.back();
+                        initial_state.stack.pop_back();
+                        uint32_t lhs = initial_state.stack.back();
+                        initial_state.stack.pop_back();
+
+                        initial_state.stack.push_back((lhs < rhs) ? 1u : 0u);
+                        break;
+                    }
+
                 case opcode::LOAD_32 :
                     {
                         auto address = pop_u32();
